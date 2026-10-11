@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledger — the accounts book that stays on your machine</title>
+<meta name="description" content="Track income and expenses, lock your passwords behind AES-256, keep every number on your own device. No account, no server.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0C0F;
+    --panel:#12151A;
+    --panel-2:#161A20;
+    --line:#232830;
+    --text:#E7EAEE;
+    --muted:#7C8592;
+    --dim:#4B525E;
+    --money:#5FD98A;
+    --amber:#FFB454;
+    --red:#FF6B6B;
+    --sans:'Space Grotesk', -apple-system, sans-serif;
+    --mono:'JetBrains Mono', ui-monospace, monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--bg); color:var(--text); font-family:var(--sans);
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  ::selection{background:var(--money); color:#062012;}
+  a{color:inherit;}
+  .wrap{max-width:1080px; margin:0 auto; padding:0 28px;}
+  .mono{font-family:var(--mono);}
+
+  /* faint paper-grain texture over the whole page */
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:1; opacity:.035;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ---- NAV ---- */
+  nav{
+    position:fixed; top:0; left:0; right:0; z-index:50;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 28px; backdrop-filter:blur(10px);
+    background:linear-gradient(180deg, rgba(10,12,15,.9), rgba(10,12,15,0));
+  }
+  .brand{font-family:var(--mono); font-size:14px; letter-spacing:2px;}
+  .brand b{color:var(--money); font-weight:500;}
+  .nav-cta{
+    font-family:var(--mono); font-size:12px; color:var(--text);
+    border:1px solid var(--line); padding:9px 16px; border-radius:100px;
+    background:var(--panel);
+  }
+  .nav-cta:hover{border-color:var(--money);}
+
+  /* ---- HERO ---- */
+  .hero{
+    min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    position:relative; padding:120px 28px 60px; text-align:center;
+  }
+  .hero .balance-label{color:var(--muted); font-family:var(--mono); font-size:13px; margin-bottom:10px;}
+  .balance{
+    font-family:var(--mono); font-weight:600; font-size:clamp(42px, 9vw, 92px);
+    font-variant-numeric:tabular-nums; letter-spacing:-1px; color:var(--money);
+    text-shadow:0 0 60px rgba(95,217,138,.25);
+  }
+  .hero h1{
+    font-size:clamp(26px, 4vw, 40px); font-weight:600; max-width:680px; margin:26px 0 14px;
+    line-height:1.25;
+  }
+  .hero p{color:var(--muted); max-width:480px; font-size:15.5px; line-height:1.6;}
+
+  /* 3D ledger book */
+  .book-stage{
+    perspective:1400px; margin:56px 0 20px; width:280px; height:190px;
+  }
+  .book{
+    width:100%; height:100%; position:relative; transform-style:preserve-3d;
+    transform:rotateX(52deg) rotateZ(-32deg); transition:transform .2s ease-out;
+  }
+  .page{
+    position:absolute; inset:0; background:var(--panel); border:1px solid var(--line);
+    border-radius:4px; box-shadow:0 30px 60px rgba(0,0,0,.5);
+  }
+  .page:nth-child(1){transform:translateZ(-16px); background:var(--panel-2);}
+  .page:nth-child(2){transform:translateZ(-8px); background:#141820;}
+  .page:nth-child(3){transform:translateZ(0); padding:18px; display:flex; flex-direction:column; gap:9px;}
+  .page:nth-child(3) i{display:block; height:6px; border-radius:3px; background:var(--line);}
+  .page:nth-child(3) i.g{background:rgba(95,217,138,.5);}
+  .page:nth-child(3) i.r{background:rgba(255,107,107,.4);}
+
+  .scrollcue{
+    position:absolute; bottom:34px; left:50%; transform:translateX(-50%);
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+    color:var(--dim); font-family:var(--mono); font-size:10.5px; letter-spacing:2px;
+  }
+  .scrollcue .line{width:1px; height:36px; background:linear-gradient(var(--money), transparent); animation:pull 1.8s ease-in-out infinite;}
+  @keyframes pull{0%,100%{transform:scaleY(.4); opacity:.4;} 50%{transform:scaleY(1); opacity:1;}}
+
+  /* ---- SECTIONS shared ---- */
+  section.block{padding:150px 0; position:relative;}
+  .block h2{font-size:clamp(30px, 5vw, 52px); font-weight:600; margin-bottom:18px;}
+  .block .lede{color:var(--muted); font-size:16px; max-width:520px; line-height:1.7; margin-bottom:56px;}
+  .accent-money h2{color:var(--money);}
+  .accent-amber h2{color:var(--amber);}
+
+  /* ---- MONEY: stat cards + receipt tape ---- */
+  .stat3d{perspective:900px;}
+  .stats{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:64px;}
+  .stat{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:20px;
+    transform:rotateX(14deg) translateY(24px); opacity:0; transition:transform .7s cubic-bezier(.2,.7,.2,1), opacity .7s ease;
+  }
+  .stat.visible{transform:rotateX(0) translateY(0); opacity:1;}
+  .stat:nth-child(2){transition-delay:.08s;}
+  .stat:nth-child(3){transition-delay:.16s;}
+  .stat .k{font-family:var(--mono); font-size:10.5px; color:var(--dim); letter-spacing:1px;}
+  .stat .v{font-family:var(--mono); font-size:24px; font-weight:600; margin-top:8px; font-variant-numeric:tabular-nums;}
+  .stat.pos .v{color:var(--money);} .stat.neg .v{color:var(--red);}
+
+  .tape-mask{overflow:hidden; border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:22px 0;}
+  .tape{display:flex; gap:14px; width:max-content; will-change:transform;}
+  .chip{
+    font-family:var(--mono); font-size:13px; white-space:nowrap; background:var(--panel);
+    border:1px solid var(--line); border-radius:8px; padding:10px 16px; display:flex; gap:14px; align-items:center;
+  }
+  .chip .d{color:var(--dim); font-size:11px;}
+  .chip .c{color:var(--muted); font-size:11px; border-left:1px solid var(--line); padding-left:10px;}
+  .chip .a.pos{color:var(--money);} .chip .a.neg{color:var(--red);}
+
+  /* ---- VAULT: 3D safe ---- */
+  .vault-stage{
+    display:grid; grid-template-columns:1fr 1fr; gap:60px; align-items:center;
+  }
+  .safe-wrap{perspective:1200px; display:flex; justify-content:center;}
+  .safe{
+    width:240px; height:240px; position:relative; transform-style:preserve-3d;
+  }
+  .safe .frame{
+    position:absolute; inset:0; border-radius:50%; background:var(--panel-2);
+    border:1px solid var(--line); box-shadow:inset 0 0 0 10px var(--bg), 0 40px 80px rgba(0,0,0,.5);
+  }
+  .safe .door{
+    position:absolute; inset:14px; border-radius:50%;
+    background:conic-gradient(from 210deg, #1b2029, #12151a 40%, #1b2029 60%, #12151a);
+    border:1px solid var(--line); transform-origin:left center;
+    display:flex; align-items:center; justify-content:center; transition:transform .1s linear;
+  }
+  .safe .dial{width:64px; height:64px; border-radius:50%; border:3px solid var(--amber); position:relative;}
+  .safe .dial::after{content:""; position:absolute; top:6px; left:50%; width:2px; height:20px; background:var(--amber); transform:translateX(-50%);}
+  .vault-facts{}
+  .vfact{display:flex; justify-content:space-between; gap:16px; padding:14px 0; border-bottom:1px solid var(--line); font-family:var(--mono); font-size:13.5px;}
+  .vfact span:first-child{color:var(--muted);}
+  .vfact span:last-child{color:var(--text);}
+
+  /* ---- EVERYWHERE: 3D devices ---- */
+  .devices{display:flex; gap:48px; align-items:flex-end; justify-content:center; padding:30px 0 10px; flex-wrap:wrap; perspective:1600px;}
+  .laptop, .phone{
+    transform:rotateY(-16deg) rotateX(4deg) translateY(30px); opacity:0;
+    transition:transform .8s cubic-bezier(.2,.7,.2,1), opacity .8s ease;
+  }
+  .laptop.visible, .phone.visible{transform:rotateY(-10deg) rotateX(2deg) translateY(0); opacity:1;}
+  .laptop{width:340px;}
+  .laptop .screen{background:var(--panel); border:1px solid var(--line); border-radius:10px 10px 3px 3px; padding:12px; height:200px;}
+  .laptop .base{height:12px; background:var(--panel-2); border-radius:0 0 8px 8px; margin:0 -10px; box-shadow:0 12px 24px rgba(0,0,0,.5);}
+  .phone{width:120px;}
+  .phone .screen{background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:10px; height:230px; box-shadow:0 20px 40px rgba(0,0,0,.5);}
+  .mini-row{height:8px; border-radius:4px; background:var(--line); margin-bottom:8px;}
+  .mini-row.g{background:rgba(95,217,138,.5); width:60%;}
+  .mini-row.r{background:rgba(255,107,107,.4); width:40%;}
+  .platform-tags{display:flex; gap:10px; justify-content:center; margin-top:36px; flex-wrap:wrap;}
+  .ptag{font-family:var(--mono); font-size:12px; border:1px solid var(--line); border-radius:100px; padding:8px 16px; color:var(--muted);}
+
+  /* ---- CTA ---- */
+  .cta{
+    text-align:center; padding:180px 0 120px;
+  }
+  .cta h2{font-size:clamp(32px,6vw,58px); font-weight:600; margin-bottom:18px;}
+  .cta p{color:var(--muted); margin-bottom:36px;}
+  .cta-btn{
+    display:inline-block; font-family:var(--mono); font-size:14px; padding:16px 32px;
+    background:var(--money); color:#062012; border-radius:100px; font-weight:600;
+  }
+  .cta-btn:hover{filter:brightness(1.08);}
+
+  footer{border-top:1px solid var(--line); padding:32px 28px; text-align:center; color:var(--dim); font-family:var(--mono); font-size:11.5px;}
+
+  @media (max-width:760px){
+    .vault-stage{grid-template-columns:1fr; gap:40px;}
+    .stats{grid-template-columns:1fr;}
+    .devices{gap:30px;}
+    .laptop{width:88vw; max-width:340px;}
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important; transition:none !important;}
+    .book{transform:rotateX(52deg) rotateZ(-32deg) !important;}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="brand">LEDG<b>·</b>ER</div>
+  <a class="nav-cta" href="index.html">Open the ledger</a>
+</nav>
+
+<section class="hero">
+  <div class="balance-label">current balance</div>
+  <div class="balance mono" id="heroBalance">€ 0.00</div>
+  <h1>The ledger you don't have to trust anyone else with.</h1>
+  <p>Income, expenses, and an encrypted vault for your logins — all kept on your own device. No account, no server, nothing to leak.</p>
+
+  <div class="book-stage">
+    <div class="book" id="book">
+      <div class="page"></div>
+      <div class="page"></div>
+      <div class="page">
+        <i style="width:70%"></i>
+        <i class="g" style="width:40%"></i>
+        <i style="width:85%"></i>
+        <i class="r" style="width:30%"></i>
+        <i style="width:55%"></i>
+        <i class="g" style="width:45%"></i>
+      </div>
+    </div>
+  </div>
+
+  <div class="scrollcue"><span>SCROLL</span><span class="line"></span></div>
+</section>
+
+<section class="block accent-money">
+  <div class="wrap">
+    <h2>Money</h2>
+    <p class="lede">Log income and expenses as they happen. See a live balance and every transaction categorized — client work, tools, rent, whatever it was for.</p>
+
+    <div class="stats stat3d">
+      <div class="stat"><div class="k">BALANCE</div><div class="v">€ 12,480.50</div></div>
+      <div class="stat pos"><div class="k">INCOME (30D)</div><div class="v">€ 6,200.00</div></div>
+      <div class="stat neg"><div class="k">EXPENSE (30D)</div><div class="v">€ 1,940.25</div></div>
+    </div>
+
+    <div class="tape-mask">
+      <div class="tape" id="tape"></div>
+    </div>
+  </div>
+</section>
+
+<section class="block accent-amber">
+  <div class="wrap">
+    <h2>Vault</h2>
+    <p class="lede">Locked with your password, not ours. Logins are encrypted on your device before they ever touch the disk.</p>
+
+    <div class="vault-stage">
+      <div class="safe-wrap">
+        <div class="safe" id="safe">
+          <div class="frame"></div>
+          <div class="door" id="safeDoor"><div class="dial"></div></div>
+        </div>
+      </div>
+      <div class="vault-facts">
+        <div class="vfact"><span>Encryption</span><span>AES-256-GCM</span></div>
+        <div class="vfact"><span>Key derivation</span><span>PBKDF2 · 250,000 rounds</span></div>
+        <div class="vfact"><span>Storage</span><span>this device only</span></div>
+        <div class="vfact"><span>Recovery</span><span>none — that's the point</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="block">
+  <div class="wrap">
+    <h2>Everywhere</h2>
+    <p class="lede">One web app that installs like software. No app store, no forced updates, no telemetry.</p>
+
+    <div class="devices">
+      <div class="laptop">
+        <div class="screen">
+          <div class="mini-row" style="width:40%"></div>
+          <div class="mini-row g"></div>
+          <div class="mini-row r"></div>
+          <div class="mini-row" style="width:80%"></div>
+          <div class="mini-row g" style="width:50%"></div>
+        </div>
+        <div class="base"></div>
+      </div>
+      <div class="phone">
+        <div class="screen">
+          <div class="mini-row" style="width:60%"></div>
+          <div class="mini-row g"></div>
+          <div class="mini-row r"></div>
+          <div class="mini-row" style="width:70%"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="platform-tags">
+      <span class="ptag">macOS</span>
+      <span class="ptag">Windows</span>
+      <span class="ptag">Android</span>
+    </div>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="wrap">
+    <h2>Start your ledger</h2>
+    <p>Free, private, and already running. Open it and add your first transaction.</p>
+    <a class="cta-btn" href="index.html">Open the ledger</a>
+  </div>
+</section>
+
+<footer>Built by Parth Patel · Pixel Crafted Editing Studio</footer>
+
+<script>
+(function(){
+"use strict";
+const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* hero balance count-up */
+const heroBalanceEl = document.getElementById('heroBalance');
+function fmtEUR(n){ return '€ ' + n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function countUp(el, target, duration){
+  if(reduced){ el.textContent = fmtEUR(target); return; }
+  const start = performance.now();
+  function tick(now){
+    const p = Math.min(1, (now-start)/duration);
+    const eased = 1 - Math.pow(1-p, 3);
+    el.textContent = fmtEUR(target*eased);
+    if(p<1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+countUp(heroBalanceEl, 12480.50, 1600);
+
+/* receipt tape content */
+const entries = [
+  {d:'Sep 02', c:'Client work', desc:'Client payment — retouching pack', a:850, pos:true},
+  {d:'Sep 03', c:'Software', desc:'Adobe Creative Cloud', a:59.99, pos:false},
+  {d:'Sep 05', c:'Client work', desc:'Client payment — landing page build', a:1200, pos:true},
+  {d:'Sep 06', c:'Travel', desc:'Train — client meeting', a:34.20, pos:false},
+  {d:'Sep 09', c:'Subscriptions', desc:'Domain renewal — studio site', a:14.50, pos:false},
+  {d:'Sep 10', c:'Client work', desc:'Client payment — solar site edit', a:640, pos:true},
+  {d:'Sep 11', c:'Equipment', desc:'External SSD', a:129, pos:false},
+];
+const tape = document.getElementById('tape');
+function chipHtml(e){
+  return `<div class="chip"><span class="d">${e.d}</span><span>${e.desc}</span><span class="c">${e.c}</span><span class="a ${e.pos?'pos':'neg'}">${e.pos?'+':'−'}€${e.a.toFixed(2)}</span></div>`;
+}
+tape.innerHTML = entries.concat(entries).concat(entries).map(chipHtml).join('');
+
+/* scroll-linked effects, rAF-throttled */
+let ticking = false;
+function onScroll(){
+  if(ticking) return;
+  ticking = true;
+  requestAnimationFrame(()=>{
+    updateTape();
+    updateSafeDoor();
+    ticking = false;
+  });
+}
+
+function updateTape(){
+  if(reduced) return;
+  const offset = (window.scrollY * 0.35) % (tape.scrollWidth/3);
+  tape.style.transform = `translateX(${-offset}px)`;
+}
+
+const safeSection = document.querySelector('.accent-amber');
+const safeDoor = document.getElementById('safeDoor');
+function updateSafeDoor(){
+  if(reduced) return;
+  const rect = safeSection.getBoundingClientRect();
+  const vh = window.innerHeight;
+  const progress = Math.min(1, Math.max(0, (vh - rect.top) / (rect.height + vh)));
+  const angle = -progress * 70;
+  safeDoor.style.transform = `rotateY(${angle}deg)`;
+}
+
+/* hero book: subtle mouse parallax */
+const book = document.getElementById('book');
+if(!reduced){
+  window.addEventListener('mousemove', (e)=>{
+    const rx = 52 + (e.clientY / window.innerHeight - .5) * -10;
+    const rz = -32 + (e.clientX / window.innerWidth - .5) * 14;
+    book.style.transform = `rotateX(${rx}deg) rotateZ(${rz}deg)`;
+  }, {passive:true});
+}
+
+window.addEventListener('scroll', onScroll, {passive:true});
+updateTape(); updateSafeDoor();
+
+/* reveal on view */
+const io = new IntersectionObserver((entries)=>{
+  entries.forEach(en=>{ if(en.isIntersecting) en.target.classList.add('visible'); });
+}, {threshold:.25});
+document.querySelectorAll('.stat, .laptop, .phone').forEach(el=>io.observe(el));
+})();
+</script>
+</body>
+</html>

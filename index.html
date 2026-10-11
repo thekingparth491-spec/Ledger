@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LEDGER — accounts</title>
+<meta name="theme-color" content="#0A0C0F">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="shell">
+  <nav id="rail">
+    <div class="brand">LEDG<b>·</b>ER</div>
+    <div class="track active" data-section="fin">MONEY<span class="lbl">ledger</span></div>
+    <div class="track" data-section="vlt">VLT<span class="lbl">vault</span></div>
+    <div id="clock">00:00:00</div>
+  </nav>
+
+  <div id="main">
+    <header>
+      <div style="display:flex;align-items:baseline;">
+        <h1 id="secTitle">Finance</h1>
+        <span class="sub" id="secSub">income &amp; expense ledger</span>
+      </div>
+      <div class="hbtns">
+        <button class="ibtn" id="exportBtn">Export backup</button>
+        <button class="ibtn" id="importBtn">Import</button>
+        <button class="ibtn" id="settingsBtn">⚙</button>
+        <button class="btn-danger" id="lockVaultBtn" style="display:none;">Lock vault</button>
+        <button class="btn-primary" id="primaryAdd">+ Add transaction</button>
+      </div>
+    </header>
+
+    <div id="content">
+
+      <!-- FINANCE / MONEY -->
+      <section class="panel active" id="panel-fin">
+        <div class="cards">
+          <div class="card hero-balance"><div class="k">Balance</div><div class="v" id="statBalance">₹0</div></div>
+          <div class="card"><div class="k">Income (30d)</div><div class="v pos" id="statIncome">₹0</div></div>
+          <div class="card"><div class="k">Expense (30d)</div><div class="v neg" id="statExpense">₹0</div></div>
+          <div class="card"><div class="k">Transactions</div><div class="v" id="statCount">0</div></div>
+        </div>
+        <canvas id="chart"></canvas>
+
+        <div class="selectbar" id="selectBar">
+          <div><span class="n" id="selectCount">0</span> selected</div>
+          <div class="actions">
+            <button class="linkbtn" id="clearSelect">Clear</button>
+            <button class="btn-danger" id="bulkDeleteBtn">Delete selected</button>
+          </div>
+        </div>
+
+        <table>
+          <thead><tr>
+            <th class="chk"><input type="checkbox" class="rowchk" id="selectAllChk"></th>
+            <th>Date</th><th>Description</th><th>Category</th><th>Payment</th><th style="text-align:right">Amount</th><th></th>
+          </tr></thead>
+          <tbody id="finBody"></tbody>
+        </table>
+      </section>
+
+      <!-- VAULT -->
+      <section class="panel" id="panel-vlt">
+        <div id="vaultLocked" class="vaultlock">
+          <div class="icon">🔒</div>
+          <h2 id="vaultLockTitle">Vault locked</h2>
+          <p id="vaultLockDesc">Enter your master password to decrypt saved logins. This password never leaves your device.</p>
+          <input type="password" id="masterPwInput" placeholder="Master password">
+          <button class="btn-primary" id="unlockBtn" style="width:240px;">Unlock</button>
+        </div>
+        <div id="vaultUnlocked" style="display:none;">
+          <div class="vault-subhead"><h3>Logins</h3></div>
+          <div id="vaultList"></div>
+
+          <div class="vault-subhead">
+            <h3>Files</h3>
+            <button class="ibtn" id="addFileBtn">+ Add file</button>
+          </div>
+          <p class="vault-filehint">Resume, bank statements, ID scans — encrypted the same way as your logins, stored locally only.</p>
+          <div id="vaultFileList"></div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- MODALS -->
+<div class="overlay" id="ovTxn">
+  <div class="modal">
+    <h2 id="txnModalTitle">Add transaction</h2>
+    <div class="segbtns" style="margin-bottom:14px;">
+      <div class="segbtn on" data-txntype="expense">− Expense</div>
+      <div class="segbtn" data-txntype="income">+ Income</div>
+    </div>
+    <div class="field"><label>Description</label><input id="txnDesc" placeholder="e.g. Client payment — Mahendra Solar"></div>
+    <div class="row2">
+      <div class="field"><label>Amount</label><input id="txnAmt" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label>Date</label><input id="txnDate" type="date"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Category</label>
+        <select id="txnCat">
+          <option>Client work</option><option>Editing service</option><option>Software/tools</option>
+          <option>Subscriptions</option><option>Food</option><option>Travel</option><option>Rent</option>
+          <option>Equipment</option><option>Other</option>
+        </select>
+      </div>
+      <div class="field"><label>Payment method</label>
+        <select id="txnPay">
+          <option>Bank transfer</option><option>Card</option><option>Cash</option>
+          <option>UPI</option><option>PayPal</option><option>Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="modalfoot">
+      <button class="btn-ghost" data-close>Cancel</button>
+      <button class="btn-primary" id="saveTxn">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="ovVault">
+  <div class="modal">
+    <h2>Add login</h2>
+    <div class="field"><label>Site / service</label><input id="vSite" placeholder="e.g. Namecheap"></div>
+    <div class="field"><label>Username / email</label><input id="vUser" placeholder="you@example.com"></div>
+    <div class="field"><label>Password</label><input id="vPass" type="text" placeholder="password"></div>
+    <div class="field"><label>Notes (optional)</label><input id="vNotes" placeholder="recovery info, plan, etc."></div>
+    <div class="modalfoot">
+      <button class="btn-ghost" data-close>Cancel</button>
+      <button class="btn-primary" id="saveVault">Save encrypted</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="ovVaultFile">
+  <div class="modal">
+    <h2>Add file</h2>
+    <div class="field"><label>Label</label><input id="vfLabel" placeholder="e.g. Resume 2026, bank statement — Sept"></div>
+    <div class="field"><label>File (PDF, image, etc. — 20MB max)</label><input id="vfFile" type="file"></div>
+    <div class="modalfoot">
+      <button class="btn-ghost" data-close>Cancel</button>
+      <button class="btn-primary" id="saveVaultFile">Encrypt &amp; save</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="ovSetMaster">
+  <div class="modal">
+    <h2>Set master password</h2>
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px;">
+      This encrypts your vault locally (AES-GCM). There's no recovery if you forget it — write it down somewhere safe.
+    </p>
+    <div class="field"><label>New master password</label><input id="newMasterPw" type="password"></div>
+    <div class="field"><label>Confirm</label><input id="newMasterPw2" type="password"></div>
+    <div class="modalfoot">
+      <button class="btn-ghost" data-close>Cancel</button>
+      <button class="btn-primary" id="setMasterBtn">Create vault</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script type="importmap">
+{ "imports": { "motion": "https://cdn.jsdelivr.net/npm/motion@11.11.13/+esm" } }
+</script>
+<script type="module" src="src.js"></script>
+</body>
+</html>

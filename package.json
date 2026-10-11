@@ -1,0 +1,16 @@
+{
+  "name": "ledger",
+  "version": "1.0.0",
+  "description": "Cross-platform PWA income/expense ledger with an encrypted local vault.",
+  "main": "index.html",
+  "scripts": {
+    "start": "serve .",
+    "dev": "serve . -l 5173"
+  },
+  "keywords": ["pwa", "ledger", "finance", "vault"],
+  "author": "Parth Patel",
+  "license": "MIT",
+  "devDependencies": {
+    "serve": "^14.2.3"
+  }
+}
